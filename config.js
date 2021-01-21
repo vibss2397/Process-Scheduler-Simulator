@@ -10,7 +10,7 @@ var json = {
     },
     "Rate Monotonic":{
         "config":{
-            "Conf":["0 Config", "This Algorithm has no Config"],
+            "Current Utilization":["Will be decided after adding processes"],
             "Combined Period": ["Will be decided when adding processes"]
         },
         "dynamic": 0,
@@ -20,7 +20,8 @@ var json = {
     },
     "Earliest Deadline":{
         "config":{
-            "Conf":["0 Config", "This Algorithm has no Config"]
+            "Current Utilization": ["Will be decided when adding processes"],
+            "Combined Period": ["Will be decided when adding processes"]
         },
         "dynamic": 1,
         "TCB":["Id", "Period", "Duration"],

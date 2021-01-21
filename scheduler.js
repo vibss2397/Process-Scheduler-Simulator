@@ -37,6 +37,11 @@ function showProcess(){
     display_tcb();   
 }
 
+function set_process_id(){
+    let name = $('.algo-choose').html();
+    $('#'+name.replace(' ','-')+'-Id').val('P_'+ Math.floor((Math.random() * 100)));
+}
+
 function display_tcb(){
     var name = $('.algo-choose').html();
     for (let i=0;i<json[name]['TCB'].length;i++){
@@ -50,6 +55,7 @@ function display_tcb(){
     $('.TCB').append(
         "<a class='btn btn-success colo' onclick='createProcess()'>Create</a>"
     )
+    set_process_id();
 }
 function createProcess(){
     let name = $('.algo-choose').html();
@@ -73,6 +79,7 @@ function createProcess(){
         "</div><br>";
     $('.process-list').prepend(temp2)
     json2[name]['Process_list'].push(process_temp);
+    set_process_id();
     console.log(json2);
 }
 
@@ -124,16 +131,18 @@ function submit_process(){
         }
         else{
             $('.process-list').prepend('<h5 style="color:#fff;">These processes are schedulable with a combined period of '+ calc_lcm_list(json2[name]['Process_list'])+'</h5>');
+            json2[name]['config']['Current Utilization'][0] = current_u(json2[name]['Process_list']);
             json2['Rate Monotonic']['config']['Combined Period'][0] = calc_lcm_list(json2[name]['Process_list']);
             flag = 0;
         }
     }
-    if(name=='Earliest Deadline First'){
-        if(current_u(json2[name]['Process_list'])<=1){
+    if(name=='Earliest Deadline'){
+        if(current_u(json2[name]['Process_list'])>=1){
             $('.process-list').prepend('<h5 style="color: #fff;">The CPU utilization is not schedulable and wont be able to complete in deadline, change the process values</h5>');
             flag = 1;
         }else{
             $('.process-list').prepend('<h5 style="color:#fff;">These processes are schedulable with a combined period of '+ calc_lcm_list(json2[name]['Process_list'])+'</h5>');
+            json2[name]['config']['Current Utilization'][0] = current_u(json2[name]['Process_list']);
             json2[name]['config']['Combined Period'][0] = calc_lcm_list(json2[name]['Process_list']);
             flag = 0;
         }
@@ -170,8 +179,13 @@ function submit_process(){
         }
         $('.part-1').hide();
         $('.part-2').hide();
-        $('.wait-change').html('Deadline');
-        $('.wait-change-2').html('Deadline');
+        if(name=='Rate Monotonic'){
+            $('.add-process').hide();
+        }
+        if(name=='Earliest Deadline'){
+            $('.wait-change').html('Deadline');
+            $('.wait-change-2').html('Deadline');
+        }
         $('.part-3').show();
     }
 
@@ -190,14 +204,22 @@ function stop_timer(){
     clearInterval(interval);
 }
 function execute_one(){
-    round_robin();
-    // rate_monotonic();
-    // earliest_deadline_first();
+    let name = $('.algo-choose').html();
+    if(name=='Round Robin'){
+        round_robin();
+    }
+    else if(name=='Rate Monotonic'){
+        rate_monotonic();
+    }
+    else if(name=='Earliest Deadline'){
+        earliest_deadline_first();
+    }
 }
 var posn = 0;
 var wait_flag = 0;
-
+var temp_state = 0;
 function round_robin(){
+    console.log(temp_state);
     // push processes to ready queue  
     for(let i=0;i<json2['waiting'].length;i++){
         if(json['waiting'][i][1]<=counter2){
@@ -210,11 +232,12 @@ function round_robin(){
                 temp_arr.push(json['waiting'][i][j]);
             }
         }
+        temp_arr.push('#' + parseInt(Math.random() * 0xffffff).toString(16));
         json2['ready'].push(temp_arr);
         
         } 
     }
-    display_json_ready();
+    display_json_ready(json2['ready'][posn]);
     let i = 0;
     while(1){
         if(i==json2['waiting'].length){
@@ -231,7 +254,8 @@ function round_robin(){
     display_json_waiting();
     if(json2['ready'].length>0){
         // context switch and chosing which process to execute
-        if(counter2!=0 && counter2%(Number(json2['Round Robin']['config']['Time Slice'][0]))==0){
+        let temp_ar = json2['ready'][posn]==undefined;
+        if(counter2!=0 && temp_state!=0 && (temp_state%(Number(json2['Round Robin']['config']['Time Slice'][0]))==0 || json2['ready'][posn][3]==json2['ready'][posn][2])){
             posn+=1
             if(posn>=json2['ready'].length){
                 posn=0;
@@ -240,12 +264,14 @@ function round_robin(){
                 // setting waiting time for processes
                 json2['ready'][posn][5]=counter2-json2['ready'][posn][1]-1;
             }
+            temp_state = 0;
             do_context_switch();
             
         }
         else{
             json2['ready'][posn][3]+=1;
-            $('.posn-'+posn).css('background-color', '#1DB954');
+            temp_state+=1;
+            $('.posn-'+posn).css('background-color', json2['ready'][posn][7]);
             $('.posn-'+posn).css('color', '#ffffff');
             $('#textarea').append('Time: '+counter2+' Process: '+ json2['ready'][posn][0])
             $('#textarea').append('\n');
@@ -253,13 +279,16 @@ function round_robin(){
                 json2['ready'][posn][6]=counter2;
                 json2['suspended'].push(json2['ready'][posn]);
                 json2['ready'].splice(posn, 1);
-                display_json_suspended();
-                if(json2['ready'].length===0){
-                    display_json_ready();
+                posn-=1;
+                if(json2['ready'].length===0 && json2['waiting'].length===0){
+                    display_json_ready(json2['ready'][posn]);
+                    display_json_suspended(json2['ready'][posn]);
                     finish_execution();
                 }
+                display_json_suspended(json2['ready'][posn]);
             }
         }
+        
     }
 
 }
@@ -290,6 +319,7 @@ function rate_monotonic(){
             temp_arr[0] = json2['waiting'][i][0];
             temp_arr[4] = json2['waiting'][i][1];
             temp_arr[2] = json2['waiting'][i][2];
+            temp_arr.push('#' + parseInt(Math.random() * 0xffffff).toString(16));
             json2['ready'].push(temp_arr);
         }
         json2['waiting'] = [];
@@ -328,14 +358,18 @@ function rate_monotonic(){
             }
             if(json2['ready'].length!=0){
                 json2['ready'] = sort_p_list(json2['ready']);
-                $('#textarea').append('Time: '+counter2+' Process: '+ json2['ready'][posn][0]);
+                $('#textarea').append('Time: '+counter2+' Process: '+ json2['ready'][0][0]);
                 $('#textarea').append('\n');
                 json2['ready'][0][3]+=1;
             }
         }
-        display_json_ready();
+        display_json_ready(json2['ready'][0]);
         display_json_suspended();
-        $('.posn-0').css('background-color', '#1DB954');
+        if(json2['ready'][0]!=undefined){
+            $('.posn-0').css('background-color', json2['ready'][0][7]);
+        }else{
+            $('.posn-0').css('background-color', '#fff');
+        }
         $('.posn-0').css('color', '#ffffff');
     }
 }
@@ -367,6 +401,7 @@ function earliest_deadline_first(){
             temp_arr[4] = json2['waiting'][i][1];
             temp_arr[2] = json2['waiting'][i][2];
             temp_arr[5] = counter2+json2['waiting'][i][1];
+            temp_arr.push('#' + parseInt(Math.random() * 0xffffff).toString(16));
             json2['ready'].push(temp_arr);
         }
         json2['waiting'] = [];
@@ -433,7 +468,11 @@ function earliest_deadline_first(){
         }
         display_json_ready();
         display_json_suspended();
-        $('.posn-0').css('background-color', '#1DB954');
+        if(json2['ready'][0]!=undefined){
+            $('.posn-0').css('background-color', json2['ready'][0][7]);
+        }else{
+            $('.posn-0').css('background-color', '#fff');
+        }
         $('.posn-0').css('color', '#ffffff');
     }
 }
@@ -443,29 +482,38 @@ function finish_execution(){
     stop_timer();
 }
 
-function display_json_ready(){
+function display_json_ready(ele){
     $('.ready-q').html('');
     for(let i = 0;i<json2['ready'].length;i++){
         let str = '';
         str+='<tr class=posn-'+i+'>';
-        for (let j = 0; j<json2['ready'][i].length;j++){
+        for (let j = 0; j<json2['ready'][i].length-1;j++){
             str+='<td>'+json2['ready'][i][j]+'</td>';
         }
         str+='</tr>'; 
         $('.ready-q').append(str);
     }
+    console.log(json2['ready'][posn]);
+    if(ele!=undefined){
+    $('.progress-bar').css('background-color', ele[7]);    
+    $('.progress-bar').width(Math.floor(ele[3]/ele[2]*100)+'%');
+    }
 }
 
-function display_json_suspended(){
+function display_json_suspended(ele){
     $('.suspended-q').html('');
     for(let i = 0;i<json2['suspended'].length;i++){
         let str = '';
         str+='<tr>';
-        for (let j = 0; j<json2['suspended'][i].length;j++){
+        for (let j = 0; j<json2['suspended'][i].length-1;j++){
             str+='<td>'+json2['suspended'][i][j]+'</td>';
         }
         str+='</tr>'; 
-        $('.suspended-q').append(str)
+        $('.suspended-q').append(str);
+    }
+    if(ele!=undefined){
+    $('.progress-bar').css('background-color', ele[7]);
+    $('.progress-bar').width(Math.floor(ele[3]/ele[2]*100)+'%');
     }
 }
 
@@ -486,5 +534,6 @@ function display_json_waiting(){
 
 function do_context_switch(){
     $('#textarea').append('Time : '+ counter2+' Context_switch');
+    $('#textarea').append('\n');
     
 }

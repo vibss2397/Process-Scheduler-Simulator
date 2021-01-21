@@ -41,6 +41,10 @@ body {
   font-family: 'Montserrat', sans-serif;
 }
 
+.ldBar{
+  width : 80% !important;
+  height : 60 !important;
+}
 .cover-container {
   max-width: 80%;
 }
